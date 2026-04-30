@@ -47,6 +47,111 @@ test("rejects unauthenticated task requests", async () => {
   assert.equal(response.body.error, "Authentication required");
 });
 
+test("rejects duplicate registration with the same email", async () => {
+  await request("/auth/register", "POST", {
+    name: "First",
+    email: "dup@example.com",
+    password: "secretpass1"
+  });
+
+  const second = await request("/auth/register", "POST", {
+    name: "Second",
+    email: "dup@example.com",
+    password: "secretpass2"
+  });
+
+  assert.equal(second.status, 409);
+});
+
+test("login returns a working token after register", async () => {
+  await request("/auth/register", "POST", {
+    name: "Login User",
+    email: "login@example.com",
+    password: "secretpass1"
+  });
+
+  const login = await request("/auth/login", "POST", {
+    email: "login@example.com",
+    password: "secretpass1"
+  });
+
+  assert.equal(login.status, 200);
+  assert.ok(login.body.token);
+
+  const tasks = await request("/tasks", "GET", undefined, login.body.token);
+  assert.equal(tasks.status, 200);
+});
+
+test("filters tasks by status query parameter", async () => {
+  const register = await request("/auth/register", "POST", {
+    name: "Filter User",
+    email: "filter@example.com",
+    password: "secretpass1"
+  });
+
+  const token = register.body.token;
+  await request("/tasks", "POST", { title: "One", status: "todo" }, token);
+  await request("/tasks", "POST", { title: "Two", status: "done" }, token);
+
+  const done = await request("/tasks?status=done", "GET", undefined, token);
+  assert.equal(done.status, 200);
+  assert.equal(done.body.length, 1);
+  assert.equal(done.body[0].title, "Two");
+});
+
+test("updates a task and rejects invalid status values", async () => {
+  const register = await request("/auth/register", "POST", {
+    name: "Update User",
+    email: "update@example.com",
+    password: "secretpass1"
+  });
+
+  const token = register.body.token;
+  const create = await request("/tasks", "POST", { title: "Original" }, token);
+  const taskId = create.body.id;
+
+  const update = await request(`/tasks/${taskId}`, "PATCH", { status: "done" }, token);
+  assert.equal(update.status, 200);
+  assert.equal(update.body.status, "done");
+
+  const bad = await request(`/tasks/${taskId}`, "PATCH", { status: "wat" }, token);
+  assert.equal(bad.status, 400);
+});
+
+test("deletes a task and returns 404 when missing", async () => {
+  const register = await request("/auth/register", "POST", {
+    name: "Delete User",
+    email: "delete@example.com",
+    password: "secretpass1"
+  });
+
+  const token = register.body.token;
+  const create = await request("/tasks", "POST", { title: "Will be deleted" }, token);
+  const taskId = create.body.id;
+
+  const remove = await request(`/tasks/${taskId}`, "DELETE", undefined, token);
+  assert.equal(remove.status, 204);
+
+  const missing = await request(`/tasks/${taskId}`, "DELETE", undefined, token);
+  assert.equal(missing.status, 404);
+});
+
+test("creates and lists a project", async () => {
+  const register = await request("/auth/register", "POST", {
+    name: "Project User",
+    email: "project@example.com",
+    password: "secretpass1"
+  });
+
+  const token = register.body.token;
+  const create = await request("/projects", "POST", { name: "Q2 Roadmap" }, token);
+  assert.equal(create.status, 201);
+
+  const list = await request("/projects", "GET", undefined, token);
+  assert.equal(list.status, 200);
+  assert.ok(list.body.some((project) => project.name === "Q2 Roadmap"));
+});
+
 function request(path, method, body, token) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : "";
