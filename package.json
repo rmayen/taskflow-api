@@ -1,0 +1,22 @@
+{
+  "name": "taskflow-api",
+  "version": "1.0.0",
+  "description": "A dependency-light task management REST API with authentication, validation, persistence, and tests.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "nodejs",
+    "rest-api",
+    "backend",
+    "authentication",
+    "tasks"
+  ],
+  "author": "Rene Mayen",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
